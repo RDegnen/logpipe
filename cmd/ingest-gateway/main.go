@@ -18,15 +18,13 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/twmb/franz-go/pkg/kgo"
 
+	"github.com/Rdegnen/logpipe/internal/config"
 	"github.com/Rdegnen/logpipe/pkg/logevent"
-)
-
-const (
-	topicRawLogs = "raw_logs.v1"
 )
 
 type server struct {
 	kafka *kgo.Client
+	config *config.Config
 }
 
 type ingestResponse struct {
@@ -36,9 +34,10 @@ type ingestResponse struct {
 }
 
 func main() {
+	cfg := config.Load()
 	// Kafka client
 	k, err := kgo.NewClient(
-		kgo.SeedBrokers("localhost:9093"),
+		kgo.SeedBrokers(cfg.KafkaBrokers),
 		// Default is acks=all in Kafka terms? franz-go defaults to -1? We set explicitly:
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		// Reasonable batching defaults; tune later:
@@ -50,12 +49,11 @@ func main() {
 	}
 	defer k.Close()
 
-	s := &server{kafka: k}
+	s := &server{kafka: k, config: cfg}
 
 	r := chi.NewRouter()
 	r.Post("/ingest", s.handleIngest)
-
-	addr := ":8082"
+	addr := ":" + cfg.Port
 	log.Printf("ingest-gateway listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, r))
 }
@@ -149,7 +147,7 @@ func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rec := &kgo.Record{
-			Topic: topicRawLogs,
+			Topic: s.config.RawLogsTopic,
 			Key:   []byte(tenantID),
 			Value: b,
 		}
