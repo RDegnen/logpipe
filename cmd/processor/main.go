@@ -68,9 +68,10 @@ func main() {
 		// Track which offsets are safe to commit (highest contiguous per partition)
 		// We process records in the order franz-go delivers per partition.
 		commitMap := make(map[string]map[int32]kgo.EpochOffset)
+		var stopProcessing bool
 
 		fetches.EachRecord(func(rec *kgo.Record) {
-			if ctx.Err() != nil {
+			if stopProcessing || ctx.Err() != nil {
 				return
 			}
 
@@ -80,6 +81,7 @@ func main() {
 				// We'll retry on next poll.
 				log.Printf("process error (will retry): topic=%s partition=%d offset=%d err=%v",
 					rec.Topic, rec.Partition, rec.Offset, err)
+				stopProcessing = true
 				return
 			}
 
