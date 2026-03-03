@@ -1,4 +1,4 @@
-.PHONY: up down reset build run-gateway
+.PHONY: up down reset build run-gateway topics
 
 up:
 	docker compose -f infra/docker-compose.yml up -d
@@ -11,6 +11,9 @@ reset:
 
 build:
 	go build ./...
+
+topics:
+	./scripts/create-topics.sh
 
 run-gateway:
 	go run ./cmd/ingest-gateway

@@ -70,9 +70,14 @@ docker exec -it redpanda rpk cluster info
 
 # 2. Create Kafka Topics
 
-docker exec -it redpanda rpk topic create raw_logs.v1 -p 6
-docker exec -it redpanda rpk topic create processed_logs.v1.default -p 6
-docker exec -it redpanda rpk topic create dlq_logs.v1 -p 3
+make topics
+
+This creates all topics (idempotent, safe to re-run):
+
+- raw_logs.v1 (6 partitions)
+- processed_logs.v1.default (6 partitions)
+- dlq_logs.v1 (3 partitions)
+- seen_events.v1 (3 partitions, compacted — used for sink dedup)
 
 Verify:
 
