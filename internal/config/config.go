@@ -9,18 +9,19 @@ import (
 )
 
 type Config struct {
-	KafkaBrokers string
-	KafkaGroup string
-	RawLogsTopic string
+	KafkaBrokers       string
+	KafkaGroup         string
+	RawLogsTopic       string
 	ProcessedLogsTopic string
-	DLQTopic    string
-	Port        string
-	CommitEvery int
+	DLQTopic           string
+	SeenEventsTopic    string
+	Port               string
+	CommitEvery        int
 }
 
 func Load() *Config {
 	err := godotenv.Load()
-	if err != nil{
+	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
@@ -32,6 +33,7 @@ func Load() *Config {
 		RawLogsTopic:       os.Getenv("RAW_LOGS_TOPIC"),
 		ProcessedLogsTopic: os.Getenv("PROCESSED_LOGS_TOPIC"),
 		DLQTopic:           os.Getenv("DLQ_TOPIC"),
+		SeenEventsTopic:    os.Getenv("SEEN_EVENTS_TOPIC"),
 		Port:               os.Getenv("PORT"),
 		CommitEvery:        commitEvery,
 	}
