@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/Rdegnen/logpipe/internal/config"
+	"github.com/Rdegnen/logpipe/internal/utilities"
 	"github.com/Rdegnen/logpipe/pkg/logevent"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 type dlqMessage struct {
@@ -35,7 +35,7 @@ func main() {
 	cfg := config.Load()
 	kafkaClient, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.KafkaBrokers),
-		kgo.ConsumerGroup(cfg.KafkaGroup),
+		kgo.ConsumerGroup(cfg.KafkaProcessorGroup),
 		kgo.ConsumeTopics(cfg.RawLogsTopic),
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.DisableAutoCommit(),
@@ -51,7 +51,7 @@ func main() {
 	defer cancel()
 
 	log.Printf("processor v1 starting: brokers=%v group=%s in=%s out=%s dlq=%s",
-		cfg.KafkaBrokers, cfg.KafkaGroup, cfg.RawLogsTopic, cfg.ProcessedLogsTopic, cfg.DLQTopic,
+		cfg.KafkaBrokers, cfg.KafkaProcessorGroup, cfg.RawLogsTopic, cfg.ProcessedLogsTopic, cfg.DLQTopic,
 	)
 
 	var handledSinceCommit int
@@ -99,7 +99,7 @@ func main() {
 
 			// Commit occasionally to avoid huge replays on crash.
 			if cfg.CommitEvery > 0 && handledSinceCommit >= cfg.CommitEvery {
-				commitOffsets(ctx, kafkaClient, commitMap)
+				utilities.CommitOffsets(ctx, kafkaClient, commitMap)
 				handledSinceCommit = 0
 				clear(commitMap)
 			}
@@ -107,7 +107,7 @@ func main() {
 
 		// Commit whatever we have from this poll batch.
 		if len(commitMap) > 0 {
-			commitOffsets(ctx, kafkaClient, commitMap)
+			utilities.CommitOffsets(ctx, kafkaClient, commitMap)
 			handledSinceCommit = 0
 		}
 	}
@@ -154,11 +154,11 @@ func processOne(ctx context.Context, kafkaClient *kgo.Client, cfg *config.Config
 
 	outRecord := &kgo.Record{
 		Topic: cfg.ProcessedLogsTopic,
-		Key: rec.Key,
+		Key:   rec.Key,
 		Value: outBytes,
 	}
 
-	if perr := produceSync(ctx, kafkaClient, outRecord); perr != nil {
+	if perr := utilities.ProduceSync(ctx, kafkaClient, outRecord); perr != nil {
 		// transient => retry later (do not commit)
 		return false, perr
 	}
@@ -199,7 +199,7 @@ func produceDLQ(ctx context.Context, kafkaClient *kgo.Client, cfg *config.Config
 		KeyB64:      base64.StdEncoding.EncodeToString(rec.Key),
 		ValueB64:    base64.StdEncoding.EncodeToString(rec.Value),
 		ProducedAt:  time.Now().UTC().Format(time.RFC3339Nano),
-		ConsumerGrp: cfg.KafkaGroup,
+		ConsumerGrp: cfg.KafkaProcessorGroup,
 	}
 	b, _ := json.Marshal(msg)
 
@@ -209,27 +209,5 @@ func produceDLQ(ctx context.Context, kafkaClient *kgo.Client, cfg *config.Config
 		Key:   rec.Key,
 		Value: b,
 	}
-	return produceSync(ctx, kafkaClient, dlqRec)
-
-}
-
-func commitOffsets(ctx context.Context, kafkaClient *kgo.Client, offsets map[string]map[int32]kgo.EpochOffset) {
-	kafkaClient.CommitOffsets(ctx, offsets, func(_ *kgo.Client, _ *kmsg.OffsetCommitRequest, _ *kmsg.OffsetCommitResponse, err error) {
-		if err != nil {
-			log.Printf("commit error: %v", err)
-		}
-	})
-}
-
-func produceSync(ctx context.Context, kafkaClient *kgo.Client, rec *kgo.Record) error {
-	done := make(chan error, 1)
-	kafkaClient.Produce(ctx, rec, func(_ *kgo.Record, err error) {
-		done <- err
-	})
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return utilities.ProduceSync(ctx, kafkaClient, dlqRec)
 }
