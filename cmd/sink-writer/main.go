@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -10,11 +12,21 @@ import (
 
 	"github.com/Rdegnen/logpipe/internal/config"
 	"github.com/Rdegnen/logpipe/internal/utilities"
+	"github.com/Rdegnen/logpipe/pkg/logevent"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 func main() {
 	cfg := config.Load()
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", cfg.DBUser, cfg.DBPassword, cfg.Host, cfg.DBPort, cfg.DB)
+	db, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		log.Fatalf("db connect: %v", err)
+	}
+	defer db.Close()
+
 	bootstrapKafkaClient, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.KafkaBrokers),
 		kgo.ConsumeTopics(cfg.SeenEventsTopic),
@@ -36,6 +48,7 @@ func main() {
 		kgo.ConsumeTopics(cfg.ProcessedLogsTopic),
 		kgo.ConsumerGroup(cfg.KafkaSinkGroup),
 		kgo.DisableAutoCommit(),
+		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.ProducerLinger(10*time.Millisecond),
 		kgo.ProducerBatchMaxBytes(1<<20),
 	)
@@ -66,8 +79,30 @@ func main() {
 				return
 			}
 
-			// Placeholder for db write
-			log.Printf("record: %s", rec.Key)
+			var evt logevent.LogEvent
+			if err := json.Unmarshal(rec.Value, &evt); err != nil {
+				log.Printf("unmarshal error (skipping): topic=%s partition=%d offset=%d err=%v",
+					rec.Topic, rec.Partition, rec.Offset, err)
+				return
+			}
+
+			bodyJSON, err := json.Marshal(evt.Body)
+			if err != nil {
+				log.Printf("marshal body error (skipping): event_id=%s err=%v", evt.EventID, err)
+				return
+			}
+
+			_, err = db.Exec(ctx,
+				`INSERT INTO log_events (event_id, tenant_id, observed_at, level, body)
+				 VALUES ($1, $2, $3, $4, $5)
+				 ON CONFLICT (event_id) DO NOTHING`,
+				evt.EventID, evt.TenantID, evt.ObservedAt, evt.Level, bodyJSON,
+			)
+			if err != nil {
+				log.Printf("db insert error (will retry): event_id=%s err=%v", evt.EventID, err)
+				stopProcessing = true
+				return
+			}
 
 			perr := produceSeenEvent(ctx, sinkWriterKafkaClient, cfg, rec)
 			if perr != nil {

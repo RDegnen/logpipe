@@ -18,6 +18,11 @@ type Config struct {
 	SeenEventsTopic     string
 	Port                string
 	CommitEvery         int
+	Host                string
+	DB                  string
+	DBUser              string
+	DBPassword          string
+	DBPort              string
 }
 
 func Load() *Config {
@@ -38,5 +43,10 @@ func Load() *Config {
 		SeenEventsTopic:     os.Getenv("SEEN_EVENTS_TOPIC"),
 		Port:                os.Getenv("PORT"),
 		CommitEvery:         commitEvery,
+		Host:                os.Getenv("PG_HOST"),
+		DB:                  os.Getenv("PG_DATABASE"),
+		DBUser:              os.Getenv("PG_USER"),
+		DBPassword:          os.Getenv("PG_PASSWORD"),
+		DBPort:              os.Getenv("PG_PORT"),
 	}
 }

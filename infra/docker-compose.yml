@@ -35,5 +35,18 @@ services:
     volumes:
       - minio_data:/data
 
+  db:
+    image: postgres:latest
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: logpipe_user
+      POSTGRES_PASSWORD: logpipe_password
+      POSTGRES_DB: logpipe_db
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
 volumes:
   minio_data:
+  pg_data:
