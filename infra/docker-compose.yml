@@ -16,11 +16,11 @@ services:
       - "0"
       - --check=false
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:9093
+      - INTERNAL://0.0.0.0:9093,EXTERNAL://0.0.0.0:19093
       - --advertise-kafka-addr
-      - PLAINTEXT://localhost:9093
+      - INTERNAL://redpanda:9093,EXTERNAL://localhost:19093
     ports:
-      - "9093:9093"
+      - "19093:19093"
 
   minio:
     image: minio/minio:latest
@@ -30,8 +30,8 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio12345
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "19000:9000"
+      - "19001:9001"
     volumes:
       - minio_data:/data
 
@@ -39,13 +39,13 @@ services:
     image: postgres:latest
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       POSTGRES_USER: logpipe_user
       POSTGRES_PASSWORD: logpipe_password
       POSTGRES_DB: logpipe_db
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql
 
 volumes:
   minio_data:
