@@ -1,4 +1,4 @@
-.PHONY: up down reset build run-gateway topics
+.PHONY: up down reset build run-gateway topics migrate
 
 up:
 	docker compose -f infra/docker-compose.yml up -d
@@ -17,3 +17,6 @@ topics:
 
 run-gateway:
 	go run ./cmd/ingest-gateway
+
+migrate:
+	go run ./cmd/migrator
