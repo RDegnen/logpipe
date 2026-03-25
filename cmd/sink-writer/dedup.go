@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 
+	"github.com/Rdegnen/logpipe/pkg/logevent"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -45,8 +47,14 @@ func (d *Dedup) Bootstrap(ctx context.Context, kafkaClient *kgo.Client, seenEven
 
 		fetches.EachRecord(func(record *kgo.Record) {
 			highWaterMark := trackingMap[record.Partition]
+			var evt logevent.LogEvent
+			if err := json.Unmarshal(record.Value, &evt); err != nil {
+				log.Printf("unmarshal error (skipping): topic=%s partition=%d offset=%d err=%v",
+					record.Topic, record.Partition, record.Offset, err)
+				return
+			}
 
-			d.Mark(string(record.Key))
+			d.Mark(evt.EventID)
 			if record.Offset >= highWaterMark-1 {
 				delete(trackingMap, record.Partition)
 			}

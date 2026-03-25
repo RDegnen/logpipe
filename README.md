@@ -152,6 +152,10 @@ Check DLQ:
 
 docker exec -it redpanda rpk topic consume dlq_logs.v1 -n 5
 
+Check Postgres (sink writer):
+
+psql -h localhost -p 15432 -U logpipe_user -d logpipe_db -c "SELECT * FROM log_events LIMIT 10;"
+
 ---
 
 # 6. Failure Testing
@@ -223,7 +227,7 @@ docker exec -it redpanda rpk group describe processors-v1
 
 All services load from `.env` in the repo root.
 
-KAFKA_BROKERS=localhost:9093
+KAFKA_BROKERS=localhost:19093
 KAFKA_GROUP=processors-v1
 RAW_LOGS_TOPIC=raw_logs.v1
 PROCESSED_LOGS_TOPIC=processed_logs.v1.default

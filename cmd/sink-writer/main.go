@@ -75,14 +75,14 @@ func main() {
 				return
 			}
 
-			if dedup.IsDuplicate(string(rec.Key)) {
-				return
-			}
-
 			var evt logevent.LogEvent
 			if err := json.Unmarshal(rec.Value, &evt); err != nil {
 				log.Printf("unmarshal error (skipping): topic=%s partition=%d offset=%d err=%v",
 					rec.Topic, rec.Partition, rec.Offset, err)
+				return
+			}
+
+			if dedup.IsDuplicate(evt.EventID) {
 				return
 			}
 
@@ -104,7 +104,7 @@ func main() {
 				return
 			}
 
-			perr := produceSeenEvent(ctx, sinkWriterKafkaClient, cfg, rec)
+			perr := produceSeenEvent(ctx, sinkWriterKafkaClient, cfg, rec, evt.EventID)
 			if perr != nil {
 				log.Printf("process error (will retry): topic=%s partition=%d offset=%d err=%v",
 					rec.Topic, rec.Partition, rec.Offset, perr)
@@ -112,7 +112,7 @@ func main() {
 				return
 			}
 
-			dedup.Mark(string(rec.Key))
+			dedup.Mark(evt.EventID)
 			handledSinceCommit++
 			// Mark this record as safe to commit.
 			if commitMap[rec.Topic] == nil {
@@ -137,10 +137,11 @@ func main() {
 	}
 }
 
-func produceSeenEvent(ctx context.Context, kafkaClient *kgo.Client, cfg *config.Config, rec *kgo.Record) error {
+func produceSeenEvent(ctx context.Context, kafkaClient *kgo.Client, cfg *config.Config, rec *kgo.Record, eventId string) error {
 	seenRec := &kgo.Record{
 		Topic: cfg.SeenEventsTopic,
-		Key:   rec.Key,
+		Key:   []byte(eventId),
+		Value: rec.Value,
 	}
 	return utilities.ProduceSync(ctx, kafkaClient, seenRec)
 }
